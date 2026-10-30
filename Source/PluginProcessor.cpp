@@ -29,7 +29,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout BBProcessor::createLayout()
                    .withStringFromValueFunction ([decimais] (float v, int) { return String (v, decimais); }));
     };
     auto centro = [] (float mn, float mx, float c) { NormalisableRange<float> r (mn, mx); r.setSkewForCentre (c); return r; };
-    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "motor", 1 }, "Motor", StringArray { "808", "909", U ("Sintético"), U ("Acústico") }, p0.motor));
+    // o texto do motor volve ao seu valor aínda que o host o pase sen tiles ou mal descodificado (CLAP en Linux
+    // trae «Sintético» coma Latin-1): abondan as tres primeiras letras
+    const StringArray motores { "808", "909", U ("Sintético"), U ("Acústico") };
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "motor", 1 }, "Motor", motores, p0.motor,
+               AudioParameterChoiceAttributes().withValueFromStringFunction ([] (const String& t)
+               {
+                   const auto x = t.trim().toLowerCase();
+                   for (auto [i, ini] : { std::pair { 0, "808" }, { 1, "909" }, { 2, "sin" }, { 3, "ac" } })
+                       if (x.startsWith (ini)) return i;
+                   return jlimit (0, bombo::NUM_MOTORES - 1, x.getIntValue());
+               })));
     l.add (real ("afinacion", U ("Afinación"), centro (25.0f, 160.0f, 55.0f), (float) p0.afinacion, "Hz"));
     l.add (real ("caida", U ("Caída"), centro (40.0f, 5000.0f, 500.0f), (float) p0.caida, "ms", 0));
     l.add (real ("golpe", "Golpe", { 0.0f, 100.0f }, (float) p0.golpe * 100.0f, "%"));

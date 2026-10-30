@@ -77,7 +77,7 @@ Usa o núcleo común de Escoita ([escoita-nucleo](https://github.com/callejodev-
 - **Un golpe abafa o anterior** sen clic.
 - **Bloques**: con bloques de 512 e de 37 mostras sae o mesmo, mostra a mostra, nos catro motores (e a súa pegada).
 - **Os 20 presets** soan, sen valores non numéricos e sen chegar ao teito (o limitador non actúa con ningún).
-- **Tocar** e **todo o son fóra**, **bypass**, **saída mono**, **estado**, **A/B**, **presets propios**, **desfacer**, **programas do DAW** e **limitador**.
+- **Tocar** e **todo o son fóra**, **texto e valor de cada parámetro** (ida e volta, tamén o motor cos tiles mal lidos), **bypass**, **saída mono**, **estado**, **A/B**, **presets propios**, **desfacer**, **programas do DAW** e **limitador**.
 - **Validación**: pluginval ao nivel máximo (10), auval no Mac e clap-validator.
 
 Na CI van en Mac, Windows e Linux, e tamén con AddressSanitizer e UBSan (`tools/probas-ci.sh`).

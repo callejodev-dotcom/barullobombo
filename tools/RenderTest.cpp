@@ -337,7 +337,7 @@ int main (int argc, char** argv)
         setParam (p, "golpe", 100.0f);
         const auto o = tocar (p, { { 812.0 / sr, 36, 1.0f } }, 0.1, 512, sr);
         int onde = -1;
-        for (int i = 0; i < o.getNumSamples() && onde < 0; ++i) if (o.getSample (0, i) != 0.0f) onde = i;
+        for (int i = 0; i < o.getNumSamples() && onde < 0; ++i) if (std::abs (o.getSample (0, i)) > 0.0f) onde = i;
         check (onde == 812, "MIDI: a nota no seu sitio dentro do bloque", "(mostra " + juce::String (onde) + ")");
     }
     {   // un golpe abafa o anterior sen clic (fundido de 4 ms), e non se suman
@@ -361,7 +361,7 @@ int main (int argc, char** argv)
                 return tocar (p, ritmo (2.5), 3.0, bloque, sr);
             };
             const auto x = render (512), y = render (37);
-            ok = ok && diferenza (x, y) == 0.0f && finito (x) && pico (x) > 0.1f;
+            ok = ok && diferenza (x, y) <= 0.0f && finito (x) && pico (x) > 0.1f;
             if (m == bombo::ACUSTICO)
             {
                 std::printf ("pegada da saída: %016llx\n", (unsigned long long) pegada (x));
@@ -427,7 +427,7 @@ int main (int argc, char** argv)
         BBProcessor b; b.setStateInformation (mb.getData(), (int) mb.getSize());
         bool ok = b.getPreset() == 12 && b.nomePreset() == a.nomePreset() && b.presetEditado() && std::abs (b.uiScale - 0.8f) < 1e-6f;
         const auto x = tocar (a, ritmo (1.5), 1.5, 512, sr), y = tocar (b, ritmo (1.5), 1.5, 512, sr);
-        ok = ok && diferenza (x, y) == 0.0f;
+        ok = ok && diferenza (x, y) <= 0.0f;
         check (ok, "estado gardado/recuperado (soa igual)", "(" + juce::String ((int) mb.getSize()) + " bytes)");
     }
     {   // A/B e presets propios (do núcleo), co nome do preset
@@ -464,6 +464,20 @@ int main (int argc, char** argv)
         const bool u2 = p.getPreset() == 0 && ! p.presetEditado();
         p.undo.redo(); p.undo.redo();
         check (u1 && u2 && p.getPreset() == 5 && p.presetEditado(), "desfacer e refacer (preset e mandos)");
+    }
+    {   // o texto de cada parámetro volve ao mesmo valor (coma pide clap-validator), tamén o motor con tiles mal lidos
+        BBProcessor p;
+        juce::String mal;
+        for (auto* prm : p.getParameters())
+            for (float v : { 0.0f, 0.37f, 0.505f, 0.75f, 1.0f })
+            {
+                const auto t = prm->getText (v, 100), t2 = prm->getText (prm->getValueForText (t), 100);
+                if (t != t2) mal << prm->getName (50) << ": " << t << " -> " << t2 << "; ";
+            }
+        auto* m = p.apvts.getParameter ("motor");
+        const bool latin1 = m->convertFrom0to1 (m->getValueForText ("Sint" + juce::String::charToString (0xC3) + juce::String::charToString (0xA9) + "tico")) > 1.5f
+                         && m->convertFrom0to1 (m->getValueForText ("Acustico")) > 2.5f;
+        check (mal.isEmpty() && latin1, "texto e valor de cada parámetro, ida e volta", mal);
     }
     {   // os programas do DAW son os presets
         BBProcessor p;
