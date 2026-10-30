@@ -27,8 +27,9 @@ Avisan porque os instaladores non levan sinatura de pago, non porque haxa nada r
 - **Os catro mandos**: *Afinación* (25–160 Hz; na pantalla, a nota que lle corresponde), *Caída* (de 40 ms a 5 s), *Golpe* (o clic do ataque) e *Carácter* (saturación: redondea o pico e sobe a cola).
 - **TOCAR**: un golpe para escoitalo sen teclado (o LED acéndese con cada golpe, tamén os do MIDI). Cambiar de preset ou de motor, ou soltar un mando, tamén toca.
 - **SEGUIR NOTA**: cada nota MIDI soa no seu ton (La = 440 Hz), para tocar o bombo coma un baixo. Apagado, todas as notas soan na afinación.
+- **GLIDE**: se tocas unha nota mentres segues premendo a anterior (e aínda soa), o ton desliza ata ela en liña recta, en semitonos, sen golpe novo e sen volver empezar a cola: o slide do 808 do trap. Soltando antes, golpea normal. O *tempo do glide* (10–500 ms), en MÁIS. Na pantalla, unha liña crema debuxa o ton que soa de verdade: vese deslizar.
 - **MÁIS**:
-  - *O corpo e o golpe*: barrido (canto máis alto empeza o ton, ata 48 semitonos), tempo do barrido, ton do golpe, sub (unha senoide limpa por debaixo) e velocidade (canto conta a forza da nota);
+  - *O corpo e o golpe*: barrido (canto máis alto empeza o ton, ata 48 semitonos), tempo do barrido, ton do golpe, sub (unha senoide limpa por debaixo), velocidade (canto conta a forza da nota) e tempo do glide;
   - *O parche e a sala*: maza, abafado e casco (no Acústico), sala (un cuarto curto, en estéreo) e volume.
 - **A pantalla**: o golpe co son de agora (a onda e o ton, que baixa co barrido), un cursor que corre cando soa, a afinación coa súa nota e o nivel de saída.
 - **Cada golpe abafa o anterior** cun fundido de 4 ms, coma unha caixa de ritmos: sen clic e sen que se sumen.
@@ -45,6 +46,7 @@ nota ─┬─ corpo (808, 909, Sintético ou Acústico, co barrido) ─┬─ �
       └─ golpe (pulso e ruído polo paso banda) ─ × forza ─────────────────────────────┘
 ```
 
+- **O glide**: a nota nova non dispara outra voz; a que soa leva un desprazamento en semitonos que vai a cero en liña recta no tempo do glide. Os modos do 808 e do Acústico naceron na nota do golpe e seguen a nova en proporción (os que subirían por riba de 0,95 de Nyquist calan); o barrido que quede súmase.
 - **O barrido**: o ton empeza *barrido* semitonos por riba e baixa á afinación cunha curva exponencial (o *tempo do barrido* é a súa constante de tempo).
 - **808**: un fasor que xira á frecuencia do corpo e cae no tempo da caída (un resonador complexo: se o ton se move co barrido, a amplitude non cambia), excitado cun pulso de 1 ms. Coma na máquina, o son nace do filtro, non dun oscilador.
 - **909**: un oscilador triangular que pasa por un conformador senoidal (case unha senoide, cos harmónicos impares da triangular) e un chisco de pegada nos primeiros 15 ms.
@@ -75,6 +77,7 @@ Usa o núcleo común de Escoita ([escoita-nucleo](https://github.com/callejodev-
 - **Velocidade**, **golpe** (os agudos do ataque en cada motor) e **parche** (o abafado acurta, a maza de plástico ten máis agudos ca a de feltro e o casco alonga).
 - **MIDI**: a nota empeza na súa mostra dentro do bloque.
 - **Un golpe abafa o anterior** sen clic.
+- **Glide**: premendo a anterior, desliza de Do1 (65,4 Hz) a Sol1 (98,0 Hz) sen golpe novo e sen clic, e polo medio do camiño a metade do tempo; soltando antes, ou co glide apagado, golpea.
 - **Bloques**: con bloques de 512 e de 37 mostras sae o mesmo, mostra a mostra, nos catro motores (e a súa pegada).
 - **Os 20 presets** soan, sen valores non numéricos e sen chegar ao teito (o limitador non actúa con ningún).
 - **Tocar** e **todo o son fóra**, **texto e valor de cada parámetro** (ida e volta, tamén o motor cos tiles mal lidos), **bypass**, **saída mono**, **estado**, **A/B**, **presets propios**, **desfacer**, **programas do DAW** e **limitador**.

@@ -12,6 +12,7 @@ BBProcessor::BBProcessor()
     motorP = p ("motor"); afinacion = p ("afinacion"); caida = p ("caida"); golpe = p ("golpe"); caracter = p ("caracter");
     barrido = p ("barrido"); tempoBarrido = p ("tempoBarrido"); tonGolpe = p ("tonGolpe"); sub = p ("sub"); velocidade = p ("velocidade");
     maza = p ("maza"); abafado = p ("abafado"); casco = p ("casco"); sala = p ("sala"); seguir = p ("seguir");
+    glide = p ("glide"); tempoGlide = p ("tempoGlide");
     volume = p ("volume"); bypass = p ("bypass");
     nome = U (bombo::PRESETS[0].nome);
 }
@@ -54,6 +55,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout BBProcessor::createLayout()
     l.add (real ("casco", "Casco", { 0.0f, 100.0f }, (float) p0.casco * 100.0f, "%"));
     l.add (real ("sala", "Sala", { 0.0f, 100.0f }, (float) p0.sala * 100.0f, "%"));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "seguir", 1 }, "Seguir a nota", onOff, (int) p0.seguir));
+    l.add (std::make_unique<AudioParameterChoice> (ParameterID { "glide", 1 }, "Glide", onOff, (int) p0.glide));
+    l.add (real ("tempoGlide", "Tempo do glide", centro (10.0f, 500.0f, 80.0f), (float) p0.tempoGlide, "ms", 0));
     l.add (real ("volume", "Volume", { -24.0f, 6.0f, 0.1f }, 0.0f, "dB"));
     l.add (std::make_unique<AudioParameterChoice> (ParameterID { "bypass", 1 }, "Bypass", onOff, 0));
     return l;
@@ -69,7 +72,8 @@ static std::vector<std::pair<const char*, float>> valoresDe (const bombo::Preset
              { "caracter", (float) p.caracter * 100.0f }, { "barrido", (float) p.barrido }, { "tempoBarrido", (float) p.tempoBarrido },
              { "tonGolpe", (float) p.tonGolpe }, { "sub", (float) p.sub * 100.0f }, { "velocidade", (float) p.velocidade * 100.0f },
              { "maza", (float) p.maza * 100.0f }, { "abafado", (float) p.abafado * 100.0f }, { "casco", (float) p.casco * 100.0f },
-             { "sala", (float) p.sala * 100.0f }, { "seguir", p.seguir ? 1.0f : 0.0f } };
+             { "sala", (float) p.sala * 100.0f }, { "seguir", p.seguir ? 1.0f : 0.0f },
+             { "glide", p.glide ? 1.0f : 0.0f }, { "tempoGlide", (float) p.tempoGlide } };
 }
 
 void BBProcessor::cargarPreset (int i)
@@ -119,6 +123,7 @@ bombo::Axustes BBProcessor::axustes() const
     a.barrido = barrido->load(); a.tempoBarrido = tempoBarrido->load(); a.tonGolpe = tonGolpe->load(); a.sub = sub->load() / 100.0;
     a.velocidade = velocidade->load() / 100.0; a.maza = maza->load() / 100.0; a.abafado = abafado->load() / 100.0;
     a.casco = casco->load() / 100.0; a.sala = sala->load() / 100.0; a.seguir = seguir->load() > 0.5f;
+    a.glide = glide->load() > 0.5f; a.tempoGlide = tempoGlide->load();
     return a;
 }
 
@@ -137,6 +142,7 @@ bool BBProcessor::isBusesLayoutSupported (const BusesLayout& l) const
 void BBProcessor::prepareToPlay (double sampleRate, int)
 {
     sr = sampleRate;
+    premidas.fill (false);
     motor.axustar (axustes());
     motor.preparar (sampleRate);
     // o teito mira 1,5 ms por diante (baixa suave antes do pico, sen soar a clip): esa é a latencia
@@ -174,8 +180,18 @@ void BBProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuff
         for (; evento != midi.cend() && (*evento).samplePosition <= i; ++evento)
         {
             const auto m = (*evento).getMessage();
-            if (m.isNoteOn()) disparar (m.getNoteNumber(), m.getFloatVelocity());
-            else if (m.isAllNotesOff() || m.isAllSoundOff()) motor.silenciar();
+            if (m.isNoteOn())
+            {
+                // co glide, unha nota tocada mentres segue premida outra desliza (se aínda soa) en vez de golpear
+                const int nota = m.getNoteNumber();
+                bool outra = false;
+                for (int k = 0; k < 128; ++k) outra = outra || (k != nota && premidas[(size_t) k]);
+                if (glide->load() > 0.5f && outra && motor.deslizar (nota)) ultimaNota.store (nota);
+                else disparar (nota, m.getFloatVelocity());
+                premidas[(size_t) nota] = true;
+            }
+            else if (m.isNoteOff()) premidas[(size_t) m.getNoteNumber()] = false;
+            else if (m.isAllNotesOff() || m.isAllSoundOff()) { motor.silenciar(); premidas.fill (false); }
         }
         volS += (volT - volS) * sm; bypassS += (bypassT - bypassS) * sm;
         double l, r;
@@ -191,6 +207,7 @@ void BBProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuff
     }
     for (int ch = 2; ch < outs; ++ch) buffer.clear (ch, 0, n);
     nivelSaida.store (ps);
+    tonAgora.store ((float) motor.tonAgora());
 }
 
 // ================================================================ estado

@@ -374,7 +374,9 @@ void Pantalla::tick()
     ultimoTick = agora;
     if (desdeGolpe >= 0) desdeGolpe += dt;
     const int g = proc.golpes.load();
-    if (g != golpesVistos) { golpesVistos = g; desdeGolpe = 0; led = 1; }
+    if (g != golpesVistos) { golpesVistos = g; desdeGolpe = 0; led = 1; rastro.clear(); }
+    const double tonAgora = proc.tonAgora.load();
+    if (desdeGolpe >= 0 && tonAgora > 0 && (rastro.empty() || desdeGolpe > rastro.back().x)) rastro.push_back ({ desdeGolpe, tonAgora });
     led *= 0.85f;
     saida = juce::jmax (proc.nivelSaida.load(), saida * 0.88f);
     const auto a = proc.axustes();
@@ -468,6 +470,22 @@ void Pantalla::paint (juce::Graphics& g)
         }
         g.setColour (col::azul.withAlpha (0.25f)); g.strokePath (p, juce::PathStrokeType (5.0f));
         g.setColour (col::azul); g.strokePath (p, juce::PathStrokeType (1.8f));
+    }
+
+    // o ton que soou de verdade desde o último golpe: co glide, vese ir dunha nota á outra
+    if (rastro.size() > 1)
+    {
+        juce::Path p;
+        bool dentro = false;
+        for (auto& q : rastro)
+        {
+            if (q.x > ms) break;
+            const float x = xOf (q.x / 1000.0), y = yOfF (juce::jlimit (fLo, fHi, q.y));
+            if (dentro) p.lineTo (x, y); else p.startNewSubPath (x, y);
+            dentro = true;
+        }
+        g.setColour (col::crema.withAlpha (0.25f)); g.strokePath (p, juce::PathStrokeType (4.0f));
+        g.setColour (col::crema); g.strokePath (p, juce::PathStrokeType (1.4f));
     }
 
     // o cursor: por onde vai o último golpe
@@ -584,13 +602,21 @@ MainView::MainView (BBProcessor& p) : proc (p), pantalla (p)
         key (seguirBtn, U ("Seguir a nota: cada nota MIDI soa no seu ton (para tocar o bombo coma un baixo, coma o 808 do trap). Apagado, todas as notas soan na afinación."));
         seguirAtt->sendInitialUpdate();
     }
+    {
+        auto* prm = proc.apvts.getParameter ("glide");
+        glideAtt = std::make_unique<juce::ParameterAttachment> (*prm, [this] (float v) { glideBtn.setToggleState (v > 0.5f, juce::dontSendNotification); refreshMotor(); });
+        glideBtn.setButtonText (U ("Glide"));
+        glideBtn.onClick = [this] { glideAtt->setValueAsCompleteGesture (glideBtn.getToggleState() ? 0.0f : 1.0f); };
+        key (glideBtn, U ("Glide: se tocas unha nota mentres segues premendo a anterior, o ton desliza ata ela sen golpear de novo (o slide do 808). Soltando antes, golpea normal. O tempo, en Máis."));
+        glideAtt->sendInitialUpdate();
+    }
     tocarBtn.setButtonText (U ("Tocar"));
     tocarBtn.setTriggeredOnMouseDown (true);
     tocarBtn.onClick = [this] { proc.tocar(); };
     key (tocarBtn, U ("Un golpe, para escoitalo sen teclado (tamén o dan as notas MIDI)."));
     maisBtn.setButtonText (U ("Máis"));
     maisBtn.onClick = [this] { mostrarMais (! mais); };
-    key (maisBtn, U ("Os demais controis: o barrido, o ton do golpe, o sub, a velocidade, o parche (maza, abafado e casco), a sala e o volume."));
+    key (maisBtn, U ("Os demais controis: o barrido, o ton do golpe, o sub, a velocidade, o tempo do glide, o parche (maza, abafado e casco), a sala e o volume."));
 
     auto knob = [this] (Knob& kn, const char* pid, const juce::String& name, const juce::String& tip, std::function<juce::String (double)> fmt)
     {
@@ -615,6 +641,7 @@ MainView::MainView (BBProcessor& p) : proc (p), pantalla (p)
     knob (tonGolpe, "tonGolpe", "Ton golpe", U ("O brillo do golpe: grave, un «tum» de feltro; agudo, o clic dunha maza de plástico."), hz);
     knob (sub, "sub", "Sub", U ("Unha senoide limpa na afinación por debaixo do corpo: peso nos graves sen cambiar o ataque."), pc);
     knob (velocidade, "velocidade", "Velocidade", U ("Canto conta a forza da nota MIDI: a 0 %, todas igual de fortes."), pc);
+    knob (tempoGlide, "tempoGlide", "Tempo glide", U ("Co glide aceso: canto tarda o ton en deslizar dunha nota á seguinte."), [] (double v) { return juce::String (juce::roundToInt (v)) + " ms"; });
     knob (maza, "maza", "Maza", U ("Só no Acústico: con que se golpea. Feltro (suave e grave), madeira ou plástico (curto e cun clic)."),
           [] (double v) { return v < 33.5 ? U ("Feltro") : v < 66.5 ? U ("Madeira") : U ("Plástico"); });
     knob (abafado, "abafado", "Abafado", U ("Só no Acústico: unha almofada contra o parche. Aberto resoa; abafado é curto e con pegada."), pc);
@@ -653,7 +680,7 @@ void MainView::mostrarMais (bool s)
     mais = s;
     maisBtn.setToggleState (s, juce::dontSendNotification);
     pantalla.setVisible (! s);
-    for (auto* k : { &barrido, &tempoBarrido, &tonGolpe, &sub, &velocidade, &maza, &abafado, &casco, &sala, &volume }) k->setVisible (s);
+    for (auto* k : { &barrido, &tempoBarrido, &tonGolpe, &sub, &velocidade, &tempoGlide, &maza, &abafado, &casco, &sala, &volume }) k->setVisible (s);
     repaint();
 }
 
@@ -664,6 +691,7 @@ void MainView::refreshMotor()
     for (auto* k : { &maza, &abafado, &casco })
         if (k->slider.isEnabled() != (a.motor == bombo::ACUSTICO)) { k->slider.setEnabled (a.motor == bombo::ACUSTICO); k->repaint(); }
     if (afinacion.slider.isEnabled() == a.seguir) { afinacion.slider.setEnabled (! a.seguir); afinacion.repaint(); }
+    if (tempoGlide.slider.isEnabled() != a.glide) { tempoGlide.slider.setEnabled (a.glide); tempoGlide.repaint(); }
 }
 
 void MainView::presetsMenu()
@@ -769,7 +797,7 @@ void MainView::paint (juce::Graphics& g)
         paintPanel (g, screenArea.toFloat(), 12.0f);
         auto titulo = [&] (juce::Component& a, juce::Component& b, const juce::String& t)
         { groupTitle (g, juce::Rectangle<float> ((float) a.getX() + 4.0f, (float) screenArea.getY() + 18.0f, (float) (b.getRight() - a.getX()) - 8.0f, 20.0f), t); };
-        titulo (barrido, velocidade, U ("O corpo e o golpe"));
+        titulo (barrido, tempoGlide, U ("O corpo e o golpe"));
         titulo (maza, volume, U ("O parche e a sala"));
     }
 
@@ -810,13 +838,13 @@ void MainView::resized()
     }
     pantalla.setBounds (screenArea);
     {
-        // «Máis»: dous grupos de cinco, nunha fila
-        const int kw = 80, kh = 150, gap = 24;
-        const int grupo = 5 * kw, x0g = screenArea.getCentreX() - grupo - gap / 2 - 6, y = screenArea.getY() + 54;
+        // «Máis»: dous grupos (seis e cinco), nunha fila
+        const int kw = 74, kh = 150, gap = 24;
+        const int ancho = 11 * kw + gap, x0g = screenArea.getCentreX() - ancho / 2, y = screenArea.getY() + 54;
         int i = 0;
-        for (auto* k : { &barrido, &tempoBarrido, &tonGolpe, &sub, &velocidade }) k->setBounds (x0g + i++ * kw, y, kw, kh);
+        for (auto* k : { &barrido, &tempoBarrido, &tonGolpe, &sub, &velocidade, &tempoGlide }) k->setBounds (x0g + i++ * kw, y, kw, kh);
         i = 0;
-        for (auto* k : { &maza, &abafado, &casco, &sala, &volume }) k->setBounds (x0g + grupo + gap + 12 + i++ * kw, y, kw, kh);
+        for (auto* k : { &maza, &abafado, &casco, &sala, &volume }) k->setBounds (x0g + 6 * kw + gap + i++ * kw, y, kw, kh);
     }
     {
         const int tw = 128, th = 30, ty = controlsArea.getY() + 16;
@@ -826,8 +854,9 @@ void MainView::resized()
         const int kx = controlsArea.getCentreX() - 2 * kw;
         int i = 0;
         for (auto* k : { &afinacion, &caida, &golpe, &caracter }) k->setBounds (kx + i++ * kw, ky, kw, kh);
-        tocarBtn.setBounds (controlsArea.getX() + 22, ky + kh / 2 - 38, 118, 32);
-        seguirBtn.setBounds (controlsArea.getX() + 22, ky + kh / 2 + 2, 118, 32);
+        tocarBtn.setBounds (controlsArea.getX() + 22, ky + kh / 2 - 58, 118, 32);
+        seguirBtn.setBounds (controlsArea.getX() + 22, ky + kh / 2 - 18, 118, 32);
+        glideBtn.setBounds (controlsArea.getX() + 22, ky + kh / 2 + 22, 118, 32);
         maisBtn.setBounds (controlsArea.getRight() - 22 - 118, ky + kh / 2 - 20, 118, 32);
     }
     newVersion.setBounds (W / 2 - 170, H - 27, 340, 22);

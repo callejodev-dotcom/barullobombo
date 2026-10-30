@@ -28,7 +28,7 @@ static void writeWav (const juce::File& f, const juce::AudioBuffer<float>& b, do
         }
 }
 
-struct Nota { double t; int nota; float forza; };
+struct Nota { double t; int nota; float forza; double dur = 0.1; };   // dur: canto se preme (s)
 
 // toca as notas (no seu tempo, en mostras) polo plugin en bloques. A saída vén á par das notas, coma no
 // DAW: sen as primeiras mostras da latencia (a anticipación do teito)
@@ -46,6 +46,8 @@ static juce::AudioBuffer<float> tocar (BBProcessor& p, const std::vector<Nota>& 
         for (auto& e : notas)
         {
             const int k = (int) std::lround (e.t * sr);
+            const int fin = (int) std::lround ((e.t + e.dur) * sr);
+            if (fin >= pos && fin < pos + n) midi.addEvent (juce::MidiMessage::noteOff (1, e.nota), fin - pos);
             if (k >= pos && k < pos + n) midi.addEvent (juce::MidiMessage::noteOn (1, e.nota, e.forza), k - pos);
         }
         p.processBlock (buf, midi);
@@ -168,7 +170,7 @@ static void snapshot (const juce::File& png, bool mais)
     const double sr = 48000;
     p.setPlayConfigDetails (0, 2, sr, 512);
     p.prepareToPlay (sr, 512);
-    p.cargarPreset (mais ? 10 : 0);
+    p.cargarPreset (mais ? 5 : 0);
     std::unique_ptr<juce::AudioProcessorEditor> ed (p.createEditor());
     auto* ce = dynamic_cast<BBEditor*> (ed.get());
     ed->setSize (ui::MainView::W, ui::MainView::H);
@@ -481,6 +483,31 @@ int main (int argc, char** argv)
         const bool latin1 = m->convertFrom0to1 (m->getValueForText ("Sint" + juce::String::charToString (0xC3) + juce::String::charToString (0xA9) + "tico")) > 1.5f
                          && m->convertFrom0to1 (m->getValueForText ("Acustico")) > 2.5f;
         check (mal.isEmpty() && latin1, "texto e valor de cada parámetro, ida e volta", mal);
+    }
+    {   // o glide: unha nota tocada mentres segue premida a anterior desliza ata o seu ton, sen golpe novo e sen clic;
+        // soltando antes, ou co glide apagado, golpea
+        auto proba = [&] (bool glide, double dur1, int& golpes)
+        {
+            BBProcessor p;
+            limpo (p, bombo::M808, 50.0f, 3000.0f);
+            setParam (p, "seguir", 1.0f); setParam (p, "glide", glide ? 1.0f : 0.0f); setParam (p, "tempoGlide", 80.0f);
+            auto o = tocar (p, { { 0.0, 36, 1.0f, dur1 }, { 0.3, 43, 1.0f, 0.5 } }, 0.9, 512, sr);
+            golpes = p.golpes.load();
+            return o;
+        };
+        int g1 = 0, g2 = 0, g3 = 0;
+        const auto liso = proba (true, 0.4, g1), solto = proba (true, 0.2, g2), sen = proba (false, 0.4, g3);
+        const double antes = frecuencia (liso, sr, 0.1, 0.29), despois = frecuencia (liso, sr, 0.5, 0.85);
+        float salto = 0;
+        for (int i = (int) (0.29 * sr); i < (int) (0.45 * sr); ++i) salto = juce::jmax (salto, std::abs (liso.getSample (0, i) - liso.getSample (0, i - 1)));
+        // sen golpe novo, a cola segue caendo: despois do glide, máis baixo ca antes
+        const bool cae = pico (liso, (int) (0.32 * sr), (int) (0.5 * sr)) < pico (liso, (int) (0.1 * sr), (int) (0.29 * sr));
+        check (g1 == 1 && g2 == 2 && g3 == 2 && std::abs (antes / 65.406 - 1.0) < 0.01 && std::abs (despois / 97.999 - 1.0) < 0.01 && salto < 0.02f && cae,
+               "glide: desliza sen golpear; soltando antes ou sen glide, golpea",
+               juce::String::formatted ("(%.1f -> %.1f Hz; golpes %d/%d/%d; salto %.4f)", antes, despois, g1, g2, g3, salto));
+        // a metade do tempo do glide, o ton vai polo medio (en semitonos)
+        const double medio = 12.0 * std::log2 (frecuencia (liso, sr, 0.33, 0.35) / 65.406);
+        check (medio > 2.0 && medio < 5.5, "glide: o ton vai polo camiño", juce::String::formatted ("(%.1f semitonos aos 40 ms)", medio));
     }
     {   // os programas do DAW son os presets
         BBProcessor p;

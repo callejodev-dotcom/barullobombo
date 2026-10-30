@@ -82,6 +82,7 @@ namespace ui
         int golpesVistos = 0;
         double desdeGolpe = -1;               // ms desde o último golpe (−1: ningún)
         double ultimoTick = 0;
+        std::vector<juce::Point<double>> rastro;   // o ton que soou desde o último golpe (ms, Hz): co glide, vese deslizar
     };
 
     class MainView : public juce::Component, private juce::Timer
@@ -108,10 +109,10 @@ namespace ui
         Look look;
         juce::TooltipWindow tooltips { this, 500 };
         juce::TextButton presetBtn, prevBtn, nextBtn, presetsBtn { "Presets" }, abBtn[2], undoBtn, redoBtn, funcBtn;
-        juce::TextButton motorBtn[bombo::NUM_MOTORES], tocarBtn, seguirBtn, maisBtn;
-        std::unique_ptr<juce::ParameterAttachment> motorAtt, seguirAtt;
+        juce::TextButton motorBtn[bombo::NUM_MOTORES], tocarBtn, seguirBtn, glideBtn, maisBtn;
+        std::unique_ptr<juce::ParameterAttachment> motorAtt, seguirAtt, glideAtt;
         Knob afinacion, caida, golpe, caracter;                                              // os catro de sempre
-        Knob barrido, tempoBarrido, tonGolpe, sub, velocidade, maza, abafado, casco, sala, volume;   // «Máis»
+        Knob barrido, tempoBarrido, tonGolpe, sub, velocidade, tempoGlide, maza, abafado, casco, sala, volume;   // «Máis»
         Pantalla pantalla;
         juce::TextButton newVersion;
         juce::Rectangle<int> headerArea, screenArea, controlsArea;

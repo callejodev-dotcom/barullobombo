@@ -61,6 +61,7 @@ public:
     std::atomic<int> golpes { 0 };          // cóntanse os golpes: a pantalla acende o LED e corre o cursor
     std::atomic<int> ultimaNota { 36 };
     std::atomic<float> ultimaForza { 1 };
+    std::atomic<float> tonAgora { 0 };      // o ton que soa agora (Hz; 0 se non soa nada), para o rastro da pantalla
     float uiScale = 1.0f;
 
 private:
@@ -75,7 +76,8 @@ private:
     double sr = 48000, volS = 1, bypassS = 0;
     std::atomic<float> *motorP = nullptr, *afinacion = nullptr, *caida = nullptr, *golpe = nullptr, *caracter = nullptr, *barrido = nullptr,
                        *tempoBarrido = nullptr, *tonGolpe = nullptr, *sub = nullptr, *velocidade = nullptr, *maza = nullptr, *abafado = nullptr,
-                       *casco = nullptr, *sala = nullptr, *seguir = nullptr, *volume = nullptr, *bypass = nullptr;
+                       *casco = nullptr, *sala = nullptr, *seguir = nullptr, *glide = nullptr, *tempoGlide = nullptr, *volume = nullptr, *bypass = nullptr;
+    std::array<bool, 128> premidas {};   // as notas que seguen premidas (para o glide)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BBProcessor)
 };

@@ -6,7 +6,7 @@ Unha ferramenta de [Escoita](https://www.escoita.link).
 
 - A primeira versión: catro motores (808, 909, Sintético e Acústico), sen mostras.
 - Catro mandos (afinación, caída, golpe e carácter) e, en MÁIS, barrido, tempo do barrido, ton do golpe, sub, velocidade, maza, abafado, casco, sala e volume.
-- TOCAR (un golpe sen teclado) e SEGUIR NOTA (cada nota no seu ton, para o 808 do trap).
+- TOCAR (un golpe sen teclado), SEGUIR NOTA (cada nota no seu ton, para o 808 do trap) e GLIDE (as notas ligadas deslizan dunha á outra, sen golpe novo).
 - A pantalla: a onda e o ton do golpe, a afinación coa súa nota e o nivel.
 - 20 presets de fábrica; presets propios, A/B e desfacer; limitador de seguridade a −1 dBFS.
 

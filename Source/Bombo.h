@@ -4,7 +4,8 @@
 //   Sintético  unha senoide limpa, co barrido e a caída libres
 //   Acústico   un parche: os modos dunha membrana circular, a maza, o abafado, o parche de
 //              diante e o casco
-// Enriba, en todos: o golpe (o clic do ataque), o sub, o carácter (saturación) e unha sala curta.
+// Enriba, en todos: o golpe (o clic do ataque), o sub, o carácter (saturación) e unha sala curta. Co glide,
+// unha nota tocada mentres se segue premendo a anterior non golpea: o ton desliza ata ela (o slide do 808).
 // Cada golpe colle os axustes no momento de dar (coma nunha caixa de ritmos): mover un mando
 // cambia o seguinte. O carácter, a sala e o volume, en cambio, móvense ao momento.
 #pragma once
@@ -36,6 +37,8 @@ struct Axustes
     double casco = 0.3;         // acústico: o parche de diante e o casco
     double sala = 0;            // 0..1: un cuarto curto arredor
     bool seguir = false;        // cada nota MIDI soa no seu ton (e a afinación non conta)
+    bool glide = false;         // a nota ligada desliza dende a anterior en vez de golpear
+    double tempoGlide = 80;     // ms: canto tarda en deslizar
 
     // igual, mando a mando (sen comparar reais con ==: os mesmos bits dan o mesmo)
     bool operator== (const Axustes& o) const
@@ -44,7 +47,7 @@ struct Axustes
         return motor == o.motor && ig (afinacion, o.afinacion) && ig (caida, o.caida) && ig (golpe, o.golpe) && ig (caracter, o.caracter)
             && ig (barrido, o.barrido) && ig (tempoBarrido, o.tempoBarrido) && ig (tonGolpe, o.tonGolpe) && ig (sub, o.sub)
             && ig (velocidade, o.velocidade) && ig (maza, o.maza) && ig (abafado, o.abafado) && ig (casco, o.casco) && ig (sala, o.sala)
-            && seguir == o.seguir;
+            && seguir == o.seguir && glide == o.glide && ig (tempoGlide, o.tempoGlide);
     }
     bool operator!= (const Axustes& o) const { return ! (*this == o); }
 };
@@ -164,6 +167,18 @@ public:
     long idade() const { return n; }
     // o golpe seguinte corta este nun fundido de 4 ms (coma unha caixa de ritmos, sen clic)
     void abafar() { if (activa_ && fadePaso <= 0) fadePaso = 1.0 / (0.004 * sr); }
+    bool abafandose() const { return fadePaso > 0; }
+    double tonAgora() const { return fAgora; }
+
+    // o glide: o ton vai á nota nova en liña recta (en semitonos) en «tempoGlide», sen golpe novo e sen
+    // volver empezar a cola; se xa estaba deslizando, sae de onde vaia
+    void deslizar (const Axustes& a, int nota)
+    {
+        const double novo = std::clamp (frecuenciaBase (a, nota), 15.0, 0.1 * sr);
+        desliza += 12.0 * std::log2 (f0 / novo);
+        f0 = novo;
+        pasoDesliza = std::abs (desliza) / std::max (1.0, a.tempoGlide / 1000.0 * sr);
+    }
 
     void disparar (const Axustes& a, double forza, int nota, uint32_t semente)
     {
@@ -172,6 +187,7 @@ public:
         forza = std::clamp (forza, 0.0, 1.0);
         ganancia = 1.0 - a.velocidade * (1.0 - forza);
         f0 = std::clamp (frecuenciaBase (a, nota), 15.0, 0.1 * sr);
+        f0Inicio = f0; desliza = 0; pasoDesliza = 0;
         // o barrido nunca pasa de 0,4 da frecuencia de mostraxe
         barr = std::min (barridoEfectivo (a, forza), 12.0 * std::log2 (0.4 * sr / f0));
         kBarr = std::exp (-1.0 / (std::max (0.0005, a.tempoBarrido / 1000.0) * sr)); eBarr = 1;
@@ -258,8 +274,20 @@ public:
     {
         clic = 0;
         if (! activa_) return 0.0;
-        const double mult = barr > 0 && eBarr > 1.0e-9 ? std::exp (barr * eBarr * (0.69314718055994531 / 12.0)) : 1.0;
+        constexpr double st = 0.69314718055994531 / 12.0;
+        const bool deslizando = desliza > 0 || desliza < 0;
+        const double semitonos = (barr > 0 && eBarr > 1.0e-9 ? barr * eBarr : 0.0) + desliza;
+        const double mult = semitonos > 0 || semitonos < 0 ? std::exp (semitonos * st) : 1.0;
+        const double multGlide = deslizando ? std::exp (desliza * st) : 1.0;   // o sub non leva barrido, pero si glide
         eBarr *= kBarr;
+        if (pasoDesliza > 0)
+        {
+            desliza = desliza > 0 ? std::max (0.0, desliza - pasoDesliza) : std::min (0.0, desliza + pasoDesliza);
+            if (! (desliza > 0 || desliza < 0)) pasoDesliza = 0;
+        }
+        // os modos naceron na nota do golpe: despois dun glide, van na proporción da nota nova
+        const double multModos = mult * (f0 / f0Inicio);
+        fAgora = f0 * mult;
 
         // o corpo
         double corpo = 0;
@@ -268,7 +296,7 @@ public:
             case M808:
             {
                 const double x = n < nPulso ? std::sin (PI * ((double) n + 0.5) / nPulso) * normPulso : 0.0;
-                corpo = modos[0].paso (x, mult);
+                corpo = modos[0].paso (x, std::min (multModos, 0.9 * PI / modos[0].w));
                 break;
             }
             case M909:
@@ -286,7 +314,11 @@ public:
             case ACUSTICO:
             {
                 const double x = n < nPulso ? std::sin (PI * ((double) n + 0.5) / nPulso) * normPulso : 0.0;
-                for (int k = 0; k < numModos; ++k) corpo += modos[(size_t) k].paso (x, mult);
+                for (int k = 0; k < numModos; ++k)
+                {
+                    auto& m = modos[(size_t) k];
+                    if (m.w * multModos < 0.95 * PI) corpo += m.paso (x, multModos);   // (subindo co glide, os de arriba calan)
+                }
                 corpo *= 0.6;
                 break;
             }
@@ -304,7 +336,7 @@ public:
         double sb = 0;
         if (subNivel > 0)
         {
-            subFase += f0 / sr; subFase -= std::floor (subFase);
+            subFase += f0 * multGlide / sr; subFase -= std::floor (subFase);
             sb = subNivel * subAmp * std::sin (2.0 * PI * subFase) * std::min (1.0, (double) n / (0.004 * sr));
             subAmp *= kSub;
         }
@@ -325,7 +357,7 @@ private:
     bool activa_ = false;
     int motor = M909;
     long n = 0, vida = 0;
-    double f0 = 50, barr = 0, kBarr = 0, eBarr = 1;
+    double f0 = 50, f0Inicio = 50, fAgora = 50, desliza = 0, pasoDesliza = 0, barr = 0, kBarr = 0, eBarr = 1;
     double amp = 1, kAmp = 1, punch = 0, ePunch = 1, kPunch = 1, fase = 0, ganancia = 1;
     int nPulso = 48; double normPulso = 1;
     std::array<detalle::Modo, 16> modos;
@@ -350,7 +382,7 @@ public:
         sala.preparar (sr);
         kSuave = 1.0 - std::exp (-1.0 / (0.01 * sr));
         driveS = ax.caracter; salaS = ax.sala;
-        golpes = 0;
+        golpes = 0; ultima = nullptr;
     }
     void axustar (const Axustes& a) { ax = a; }
     const Axustes& axustes() const { return ax; }
@@ -369,12 +401,23 @@ public:
             for (auto& v : voces) if (v.idade() > libre->idade()) libre = &v;
         }
         libre->disparar (ax, forza, nota, 0x2545F491u * ++golpes);
+        ultima = libre;
     }
+
+    // o glide: a voz que soa vai á nota nova; se xa non soa (ou a está a abafar outra), false
+    bool deslizar (int nota)
+    {
+        if (ultima == nullptr || ! ultima->activa() || ultima->abafandose()) return false;
+        ultima->deslizar (ax, nota);
+        return true;
+    }
+    double tonAgora() const { return ultima != nullptr && ultima->activa() ? ultima->tonAgora() : 0.0; }
 
     void silenciar()
     {
         for (auto& v : voces) v.preparar (sr);
         sala.limpar();
+        ultima = nullptr;
     }
 
     bool soando() const
@@ -411,6 +454,7 @@ private:
     double sr = 48000, kSuave = 0.01, driveS = 0, salaS = 0;
     std::array<Voz, VOCES> voces;
     detalle::Sala sala;
+    Voz* ultima = nullptr;
     uint32_t golpes = 0;
 };
 
