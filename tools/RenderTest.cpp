@@ -30,16 +30,17 @@ static void writeWav (const juce::File& f, const juce::AudioBuffer<float>& b, do
 
 struct Nota { double t; int nota; float forza; };
 
-// toca as notas (no seu tempo, en mostras) polo plugin en bloques
+// toca as notas (no seu tempo, en mostras) polo plugin en bloques. A saída vén á par das notas, coma no
+// DAW: sen as primeiras mostras da latencia (a anticipación do teito)
 static juce::AudioBuffer<float> tocar (BBProcessor& p, const std::vector<Nota>& notas, double len, int blockSize, double sr, bool preparar = true)
 {
     if (preparar) { p.setPlayConfigDetails (0, 2, sr, blockSize); p.prepareToPlay (sr, blockSize); }
-    const int total = (int) (len * sr);
+    const int total = (int) (len * sr), lat = p.getLatencySamples();
     juce::AudioBuffer<float> out (2, total), buf (2, blockSize);
     out.clear();
-    for (int pos = 0; pos < total; pos += blockSize)
+    for (int pos = 0; pos < total + lat; pos += blockSize)
     {
-        const int n = juce::jmin (blockSize, total - pos);
+        const int n = juce::jmin (blockSize, total + lat - pos);
         buf.setSize (2, n, false, false, true);
         juce::MidiBuffer midi;
         for (auto& e : notas)
@@ -48,7 +49,9 @@ static juce::AudioBuffer<float> tocar (BBProcessor& p, const std::vector<Nota>& 
             if (k >= pos && k < pos + n) midi.addEvent (juce::MidiMessage::noteOn (1, e.nota, e.forza), k - pos);
         }
         p.processBlock (buf, midi);
-        for (int c = 0; c < 2; ++c) out.copyFrom (c, pos, buf, c, 0, n);
+        for (int c = 0; c < 2; ++c)
+            for (int i = 0; i < n; ++i)
+                if (pos + i >= lat && pos + i - lat < total) out.setSample (c, pos + i - lat, buf.getSample (c, i));
     }
     return out;
 }
@@ -331,7 +334,7 @@ int main (int argc, char** argv)
                juce::String::formatted ("(%.0f/%.0f ms; ", aberto * 1000, abafado * 1000) + U ("plástico +")
                + juce::String::formatted ("%.0f dB; casco +%.1f dB)", 10 * std::log10 (plastico / feltro), 10 * std::log10 (con / sen)));
     }
-    {   // o MIDI no seu sitio: unha nota na mostra 300 do segundo bloque empeza alí
+    {   // o MIDI no seu sitio: unha nota na mostra 300 do segundo bloque empeza alí (descontada a latencia, coma no DAW)
         BBProcessor p;
         limpo (p, bombo::M909, 50.0f, 300.0f);
         setParam (p, "golpe", 100.0f);
@@ -485,12 +488,12 @@ int main (int argc, char** argv)
         check (p.getNumPrograms() == bombo::NUM_PRESETS && p.getCurrentProgram() == 12 && p.getProgramName (12) == U (bombo::PRESETS[12].nome),
                "programas do DAW = presets");
     }
-    {   // o limitador do núcleo: a +6 dB, con todo a tope, non pasa de −1 dBFS; latencia 0
+    {   // o limitador do núcleo: a +6 dB, con todo a tope, non pasa de −1 dBFS; a latencia é a anticipación (1,5 ms)
         BBProcessor p;
         p.cargarPreset (17);
         setParam (p, "volume", 6.0f); setParam (p, "golpe", 100.0f); setParam (p, "sub", 100.0f); setParam (p, "sala", 100.0f);
         const float pk = pico (tocar (p, ritmo (2.0), 2.0, 512, sr));
-        check (pk <= 0.8913f && p.getLatencySamples() == 0, "teito a -1 dBFS e sen latencia", juce::String::formatted ("(pico %.4f)", pk));
+        check (pk <= 0.8913f && p.getLatencySamples() == 72, "teito a -1 dBFS, con 1,5 ms de anticipación", juce::String::formatted ("(pico %.4f; latencia %d)", pk, p.getLatencySamples()));
     }
     return fails;
 }

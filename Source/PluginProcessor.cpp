@@ -137,10 +137,11 @@ bool BBProcessor::isBusesLayoutSupported (const BusesLayout& l) const
 void BBProcessor::prepareToPlay (double sampleRate, int)
 {
     sr = sampleRate;
-    setLatencySamples (0);
     motor.axustar (axustes());
     motor.preparar (sampleRate);
-    teito.preparar (sampleRate, 0.080, 0.891);
+    // o teito mira 1,5 ms por diante (baixa suave antes do pico, sen soar a clip): esa é a latencia
+    teito.preparar (sampleRate, 0.080, 0.891, 0.0015);
+    setLatencySamples (teito.latencia());
     volS = ganancia (volume->load());
     bypassS = bypass->load() > 0.5f ? 1.0 : 0.0;
 }

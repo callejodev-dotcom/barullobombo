@@ -33,7 +33,7 @@ Avisan porque os instaladores non levan sinatura de pago, non porque haxa nada r
 - **A pantalla**: o golpe co son de agora (a onda e o ton, que baixa co barrido), un cursor que corre cando soa, a afinación coa súa nota e o nivel de saída.
 - **Cada golpe abafa o anterior** cun fundido de 4 ms, coma unha caixa de ritmos: sen clic e sen que se sumen.
 - **Presets propios, A/B e desfacer** (do núcleo común): os presets van en `.bbpreset`, en Documentos/Barullo Bombo/Presets. Cada clic é un paso de desfacer.
-- Un **limitador de seguridade** á saída: nunca pasa de −1 dBFS. Saída estéreo ou mono; sen latencia.
+- Un **limitador de seguridade** á saída: nunca pasa de −1 dBFS. Mira 1,5 ms por diante e baixa suave antes do pico, sen soar a clip: esa é a latencia, e o DAW compénsaa só. Saída estéreo ou mono.
 
 ## Como se fixo
 
@@ -63,7 +63,7 @@ nota ─┬─ corpo (808, 909, Sintético ou Acústico, co barrido) ─┬─ �
 | `Source/PluginEditor.*` | A interface |
 | `tools/RenderTest.cpp` | A proba |
 
-Usa o núcleo común de Escoita ([escoita-nucleo](https://github.com/callejodev-dotcom/escoita-nucleo), v0.3.0): o texto en galego, o aviso das versións novas, os presets propios, o A/B e o desfacer (`escoita::Estado`), o limitador de seguridade (`escoita::Teito`), a CI e os instaladores.
+Usa o núcleo común de Escoita ([escoita-nucleo](https://github.com/callejodev-dotcom/escoita-nucleo), v0.5.0): o texto en galego, o aviso das versións novas, os presets propios, o A/B e o desfacer (`escoita::Estado`), o limitador de seguridade con anticipación (`escoita::Teito`), a CI e os instaladores.
 
 ## Probas
 
