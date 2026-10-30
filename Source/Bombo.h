@@ -231,7 +231,7 @@ public:
         ruido = 0.5; clicNivel = a.golpe;
         switch (motor)
         {
-            case M808:      durClic = 0.0003; tRuido = 0.0015; ruido = 0.25; clicNivel *= 0.8; break;
+            case M808:      durClic = 0.0003; tRuido = 0.0015; ruido = 0.25; clicNivel *= 0.95; break;
             case M909:      break;
             case SINTETICO: durClic = 0.00025; tRuido = 0.0015; ruido = 0.15; break;
             case ACUSTICO:
@@ -239,7 +239,7 @@ public:
                 tRuido = 0.001 + 0.003 * (1.0 - a.maza);
                 ruido = 0.3 + 0.5 * a.maza;
                 centro *= 0.35 + 0.8 * a.maza;
-                clicNivel *= (0.35 + 0.65 * a.maza) * (0.6 + 0.4 * forza);
+                clicNivel *= (0.42 + 0.78 * a.maza) * (0.6 + 0.4 * forza);
                 break;
             default: break;
         }
@@ -253,8 +253,10 @@ public:
         vida = (long) (maisLonga * 11.5 * sr) + nClic + (long) (0.01 * sr);
     }
 
-    double procesar()
+    // devolve o corpo e o sub; o golpe vai á parte (en «clic»), para que o carácter non o rache
+    double procesar (double& clic)
     {
+        clic = 0;
         if (! activa_) return 0.0;
         const double mult = barr > 0 && eBarr > 1.0e-9 ? std::exp (barr * eBarr * (0.69314718055994531 / 12.0)) : 1.0;
         eBarr *= kBarr;
@@ -296,7 +298,7 @@ public:
         double e = ruido * rnd.seguinte() * eRuido;
         if (n < nClic) e += (1.0 - ruido) * std::sin (PI * ((double) n + 0.5) / nClic);
         eRuido *= kRuido;
-        const double clic = bp.paso (e) * clicNivel * 2.4;
+        clic = bp.paso (e) * clicNivel * 2.1 * ganancia;
 
         // o sub, cun fundido de 4 ms para que non tape o golpe
         double sb = 0;
@@ -307,12 +309,12 @@ public:
             subAmp *= kSub;
         }
 
-        double y = (corpo + clic + sb) * ganancia;
+        double y = (corpo + sb) * ganancia;
         if (fadePaso > 0)
         {
             fade -= fadePaso;
-            if (fade <= 0) { activa_ = false; return 0.0; }
-            y *= fade;
+            if (fade <= 0) { activa_ = false; clic = 0; return 0.0; }
+            y *= fade; clic *= fade;
         }
         if (++n >= vida) activa_ = false;
         return y;
@@ -383,22 +385,25 @@ public:
 
     void procesar (double& l, double& r)
     {
-        double s = 0;
-        for (auto& v : voces) if (v.activa()) s += v.procesar();
-        // o carácter: tanh cada vez máis forte (o pico queda no seu sitio e a cola sobe)
+        double s = 0, golpe = 0;
+        for (auto& v : voces) if (v.activa()) { double c; s += v.procesar (c); golpe += c; }
+        // o carácter: tanh cada vez máis forte no corpo (o pico queda no seu sitio e a cola sobe); o golpe
+        // entra despois, limpo: saturado, rachaba nun ruído coma un clip
         driveS += (ax.caracter - driveS) * kSuave;
         if (driveS > 1.0e-5)
         {
-            const double g = 1.0 + 20.0 * driveS * driveS;
+            const double g = 1.0 + 8.0 * driveS * driveS;
             const double sat = std::tanh (g * s) / std::tanh (g);
             s += std::min (1.0, driveS * 4.0) * (sat - s);
         }
-        s *= 0.7;
+        s = (s + golpe) * 0.62;
         salaS += (ax.sala - salaS) * kSuave;
         double wl, wr;
         sala.procesar (s, wl, wr);
-        l = s + salaS * 0.5 * wl;
-        r = s + salaS * 0.5 * wr;
+        // con sala, o seco baixa un pouco: a suma non pasa do pico de sen sala
+        const double seco = s * (1.0 - 0.3 * salaS);
+        l = seco + salaS * 0.5 * wl;
+        r = seco + salaS * 0.5 * wr;
     }
 
 private:

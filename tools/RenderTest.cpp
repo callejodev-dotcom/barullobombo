@@ -370,7 +370,7 @@ int main (int argc, char** argv)
         }
         check (ok, "mesmo son con bloques de 512 e de 37");
     }
-    {   // os presets: todos soan, sen valores non numéricos, sen pasar do teito
+    {   // os presets: todos soan, sen valores non numéricos e sen chegar ao teito (o limitador non lles toca)
         int mal = 0; float peor = 0, menos = 10; juce::String cal, calMenos;
         for (int i = 0; i < bombo::NUM_PRESETS; ++i)
         {
@@ -382,7 +382,7 @@ int main (int argc, char** argv)
             if (pk > peor) { peor = pk; cal = U (bombo::PRESETS[i].nome); }
             if (pk < menos) { menos = pk; calMenos = U (bombo::PRESETS[i].nome); }
         }
-        check (mal == 0 && peor <= 0.8913f, "os presets soan", "(" + juce::String (bombo::NUM_PRESETS) + U ("; o máis alto, ") + cal
+        check (mal == 0 && peor < 0.88f, "os presets soan, sen chegar ao teito", "(" + juce::String (bombo::NUM_PRESETS) + U ("; o máis alto, ") + cal
                + juce::String::formatted (": %.1f dBFS; ", juce::Decibels::gainToDecibels (peor)) + U ("o máis baixo, ") + calMenos
                + juce::String::formatted (": %.1f dBFS)", juce::Decibels::gainToDecibels (menos)));
     }

@@ -40,9 +40,9 @@ Avisan porque os instaladores non levan sinatura de pago, non porque haxa nada r
 `Source/Bombo.h`, sen JUCE:
 
 ```
-nota ─┬─ corpo (808, 909, Sintético ou Acústico, co barrido) ─┐
-      ├─ golpe (pulso e ruído polo paso banda) ───────────────┼─ × forza ─ carácter ─ sala ─ saída
-      └─ sub (senoide na afinación) ──────────────────────────┘
+nota ─┬─ corpo (808, 909, Sintético ou Acústico, co barrido) ─┬─ × forza ─ carácter ─┬─ sala ─ saída
+      ├─ sub (senoide na afinación) ──────────────────────────┘                      │
+      └─ golpe (pulso e ruído polo paso banda) ─ × forza ─────────────────────────────┘
 ```
 
 - **O barrido**: o ton empeza *barrido* semitonos por riba e baixa á afinación cunha curva exponencial (o *tempo do barrido* é a súa constante de tempo).
@@ -50,7 +50,7 @@ nota ─┬─ corpo (808, 909, Sintético ou Acústico, co barrido) ─┐
 - **909**: un oscilador triangular que pasa por un conformador senoidal (case unha senoide, cos harmónicos impares da triangular) e un chisco de pegada nos primeiros 15 ms.
 - **Acústico**: doce modos dunha membrana circular (as proporcións dos ceros de Bessel, de 1 a 4,23) co peso de golpear preto do centro, excitados por un pulso que dura o que a maza está contra o parche (2,8 ms de feltro, 0,4 de plástico; menos canto máis forte). O abafado acurta todos e máis os altos; o casco engade o parche de diante (un 4,5 % máis alto, que bate co de atrás) e tres modos do casco. Un golpe máis forte estira máis a pel e sobe máis o ton.
 - **O golpe**: un pulso curto e ruído que cae axiña, por un paso banda no *ton do golpe*. Cada motor ten o seu: o 808 suave, o 909 con ruído, o Sintético un clic seco e o Acústico o da maza.
-- **O carácter**: unha tanh cada vez máis forte, normalizada para que o pico quede no seu sitio e suba a cola.
+- **O carácter**: unha tanh cada vez máis forte no corpo e no sub, normalizada para que o pico quede no seu sitio e suba a cola. O golpe súmase despois, limpo: saturado rachaba nun ruído que soaba a clip.
 - **A sala**: catro liñas realimentadas cunha matriz de Hadamard (0,45 s), cos agudos que se apagan antes; o bombo queda no centro e a sala ábrese aos lados.
 
 ## Estrutura
@@ -76,7 +76,7 @@ Usa o núcleo común de Escoita ([escoita-nucleo](https://github.com/callejodev-
 - **MIDI**: a nota empeza na súa mostra dentro do bloque.
 - **Un golpe abafa o anterior** sen clic.
 - **Bloques**: con bloques de 512 e de 37 mostras sae o mesmo, mostra a mostra, nos catro motores (e a súa pegada).
-- **Os 20 presets** soan, sen valores non numéricos e sen pasar do teito.
+- **Os 20 presets** soan, sen valores non numéricos e sen chegar ao teito (o limitador non actúa con ningún).
 - **Tocar** e **todo o son fóra**, **bypass**, **saída mono**, **estado**, **A/B**, **presets propios**, **desfacer**, **programas do DAW** e **limitador**.
 - **Validación**: pluginval ao nivel máximo (10), auval no Mac e clap-validator.
 
